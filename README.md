@@ -29,4 +29,3 @@ University project developed by a team of four members.
 ## Project Status
 
 Development Environment Setup — In Progress.
-do
