@@ -1,0 +1,78 @@
+{
+  "model_name": "Persistence-Anchored Residual HistGradientBoosting",
+  "model_type": "PersistenceAnchorRegressor",
+  "status": "frozen_after_validation",
+  "artifact_path": "artifacts\\models\\residual_hgb_pipeline.joblib",
+  "target": "target_pm25_next_hour",
+  "feature_list": [
+    "station_id",
+    "pm25_at_origin",
+    "pm25_1h_before",
+    "pm25_2h_before",
+    "pm25_23h_before",
+    "pm25_rolling_mean_3h",
+    "pm25_rolling_mean_6h",
+    "pm25_rolling_mean_24h",
+    "pm25_rolling_observation_count_24h",
+    "hour",
+    "day_of_week",
+    "month",
+    "hour_sin",
+    "hour_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "month_sin",
+    "month_cos"
+  ],
+  "feature_count": 18,
+  "training": {
+    "rows": 15016,
+    "stations": [
+      "site_113",
+      "site_115",
+      "site_117"
+    ]
+  },
+  "configuration": {
+    "loss": "absolute_error",
+    "learning_rate": 0.05,
+    "max_iter": 300,
+    "max_leaf_nodes": 31,
+    "min_samples_leaf": 20,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "metrics": {
+    "mae": 11.502002464375469,
+    "rmse": 25.389579749061145,
+    "r2": 0.8905895522057974
+  },
+  "mlflow_run_id": "1f8ccef270224d2bb35de1f337e71ee3",
+  "mlflow_experiment": "AirPulse_PM25_Forecasting",
+  "created_at_utc": "2026-11-18T13:55:38.775038+00:00",
+  "validation": {
+    "rows_requested": 3629,
+    "rows_evaluated": 3629,
+    "rows_excluded": 0,
+    "exclusion_reason": "Non-finite target, anchor, or numeric feature values",
+    "metrics": [
+      {
+        "model": "Persistence",
+        "samples": 3629,
+        "MAE": 10.762865803251586,
+        "RMSE": 20.62009682326508,
+        "R2": 0.8651814863116727
+      },
+      {
+        "model": "Residual_HistGradientBoosting_L1",
+        "samples": 3629,
+        "MAE": 10.235695353763873,
+        "RMSE": 20.49972414329596,
+        "R2": 0.8667509355707068
+      }
+    ],
+    "station_metrics_file": "data\\processed\\model_evaluation\\residual_hgb_validation_station_comparison.csv",
+    "predictions_file": "data\\processed\\model_evaluation\\residual_hgb_validation_predictions.csv"
+  }
+}

@@ -1,40 +1,70 @@
-# Python environments and generated files
+ # ==========================================
+# PYTHON ENVIRONMENT
+# ==========================================
 .venv/
 venv/
+env/
+
+# ==========================================
+# PYTHON CACHE & GENERATED FILES
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 *.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
 
-# Frontend dependencies and build output
+# ==========================================
+# FRONTEND DEPENDENCIES & BUILD OUTPUT
+# ==========================================
 frontend/node_modules/
 frontend/dist/
 node_modules/
 dist/
 build/
 
-# Secrets and local environment
+# ==========================================
+# ENVIRONMENT VARIABLES & SECRETS
+# ==========================================
 .env
 .env.*
 !.env.example
 
-# IDE and operating system
+# ==========================================
+# IDE & EDITOR
+# ==========================================
 .vscode/
 .idea/
+
+# ==========================================
+# OPERATING SYSTEM
+# ==========================================
 .DS_Store
 Thumbs.db
 
-# Logs and local tracking store
+# ==========================================
+# LOGS & EXPERIMENT TRACKING
+# ==========================================
 *.log
 mlruns/
 mlflow.db
 
-# Regenerable processed datasets and evaluation results
-data/processed/
-
+# ==========================================
+# MODEL ARTIFACTS
+# ==========================================
 # Canonical trained model is stored under artifacts/models.
-# Keep the root models directory for older local artifact compatibility.
+# Keep older root-level model artifacts excluded.
 models/*.joblib
 models/*.json
 !models/.gitkeep
+
+# ==========================================
+# TEMPORARY & BACKUP FILES
+# ==========================================
+*.tmp
+*.bak
+*.swp
+*.orig 
