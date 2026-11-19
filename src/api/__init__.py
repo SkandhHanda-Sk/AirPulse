@@ -1,0 +1,1 @@
+"""AirPulse FastAPI prediction service."""
