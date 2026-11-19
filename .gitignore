@@ -1,24 +1,40 @@
-
-# Virtual Environment
+# Python environments and generated files
 .venv/
 venv/
-
-# Python Cache
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+*.egg-info/
 
-# Environment Variables and Secrets
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+node_modules/
+dist/
+build/
+
+# Secrets and local environment
 .env
 .env.*
 !.env.example
 
-# IDE and Editor
+# IDE and operating system
 .vscode/
-
-# Operating System
+.idea/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs and local tracking store
 *.log
+mlruns/
+mlflow.db
+
+# Regenerable processed datasets and evaluation results
+data/processed/
+
+# Canonical trained model is stored under artifacts/models.
+# Keep the root models directory for older local artifact compatibility.
+models/*.joblib
+models/*.json
+!models/.gitkeep
