@@ -141,3 +141,8 @@ current artifact.
 - `docs/`: dataset, preprocessing, feature, split, baseline and evaluation
   records.
 - `tests/`: API and pipeline tests.
+
+## Continuous integration
+
+GitHub Actions runs the automated test, frontend build, and Docker packaging
+checks for pushes and pull requests.
