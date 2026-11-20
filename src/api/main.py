@@ -11,7 +11,6 @@ Endpoints:
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 
 from src.api.model_loader import load_model, predict
 from src.api.schemas import HealthResponse, PredictionRequest, PredictionResponse
@@ -31,6 +30,17 @@ def _get_model():
     if _model is None:
         _model = load_model()
     return _model
+
+
+@app.get("/", tags=["general"])
+def root() -> dict[str, str]:
+    """Root endpoint providing service information."""
+    return {
+        "service": "AirPulse PM2.5 Forecasting API",
+        "status": "online",
+        "docs_url": "/docs",
+        "health_url": "/health",
+    }
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])
