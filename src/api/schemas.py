@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api.model_loader import get_feature_columns, get_anchor_column
+from src.mlflow_config import REGISTERED_MODEL_NAME
 
 _FEATURE_COLUMNS = get_feature_columns()
 _ANCHOR_COLUMN = get_anchor_column()
@@ -118,4 +119,5 @@ class HealthResponse(BaseModel):
 
     status: str = "healthy"
     model_loaded: bool = False
-    model_artifact: str = "artifacts/models/residual_hgb_pipeline.joblib"
+    model_artifact: str = f"models:/{REGISTERED_MODEL_NAME}@champion"
+    model_source: str | None = None

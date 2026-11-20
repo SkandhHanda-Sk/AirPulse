@@ -5,6 +5,11 @@ uvicorn
 pydantic
 httpx
 pytest
-mlflow
+
+# Experiment tracking
+mlflow==2.14.1
+SQLAlchemy==2.0.38
+
+# Data processing
 pandas
 numpy

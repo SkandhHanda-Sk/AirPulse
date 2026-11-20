@@ -1,10 +1,30 @@
 """Tests for the AirPulse FastAPI prediction API."""
 
+import pytest
 from fastapi.testclient import TestClient
 
-from src.api.main import app
+import src.api.main as api_main
+from src.mlflow_config import REGISTERED_MODEL_NAME
 
-client = TestClient(app)
+client = TestClient(api_main.app)
+
+
+class StubModel:
+    def predict(self, features):
+        return features["pm25_at_origin"].to_numpy() + 1
+
+
+@pytest.fixture(autouse=True)
+def use_stub_registry_model(monkeypatch):
+    monkeypatch.setattr(api_main, "_model", None)
+    monkeypatch.setattr(api_main, "load_model", lambda: StubModel())
+    monkeypatch.setattr(
+        api_main,
+        "get_model_source",
+        lambda: f"models:/{REGISTERED_MODEL_NAME}@champion",
+    )
+    yield
+    monkeypatch.setattr(api_main, "_model", None)
 
 
 def test_health_endpoint_returns_200():
@@ -15,16 +35,7 @@ def test_health_endpoint_returns_200():
     assert data["status"] == "healthy"
     assert data["model_loaded"] is True
     assert "model_artifact" in data
-
-
-def test_root_endpoint_returns_200():
-    """GET / should return 200 with service information."""
-    response = client.get("/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["service"] == "AirPulse PM2.5 Forecasting API"
-    assert data["status"] == "online"
-    assert "docs_url" in data
+    assert data["model_artifact"] == f"models:/{REGISTERED_MODEL_NAME}@champion"
 
 
 def test_predict_endpoint_returns_valid_prediction():

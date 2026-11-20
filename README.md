@@ -1,7 +1,9 @@
 # AirPulse
 
-Station-wise next-hour PM2.5 forecasting for Delhi using 2024 observations from
-the XKDR Forum India Air Quality Database:
+AirPulse forecasts continuous PM2.5 concentration one hour ahead for three
+Delhi monitoring stations using 2024 observations from the XKDR Forum India Air
+Quality Database. The target is PM2.5 concentration, not AQI. This is an
+academic forecasting application, not an official air-quality warning service.
 
 | Station ID | Location |
 |---|---|
@@ -9,112 +11,157 @@ the XKDR Forum India Air Quality Database:
 | `site_115` | NSIT Dwarka |
 | `site_117` | ITO |
 
-The target is continuous PM2.5 concentration (`target_pm25_next_hour`), not AQI.
-Input features describe information available at time `t`; the forecast is for
-`t+1`. The train/validation/test split is chronological.
+## Model and evaluation
 
-## Pipeline
+The model is a persistence-anchored residual HistGradientBoosting regressor:
 
 ```text
-data/raw -> data/processed -> src/models -> artifacts/models
-                                      -> FastAPI -> React dashboard
+residual   = actual_next_hour_pm25 - pm25_at_origin
+prediction = pm25_at_origin + predicted_residual
 ```
 
-- **Baseline:** persistence, predicting `pm25_at_origin`.
-- **ML candidate:** persistence-anchored residual HistGradientBoosting.
-- **Residual target:** actual next-hour PM2.5 minus `pm25_at_origin`.
-- **Final prediction:** `pm25_at_origin + predicted_residual`.
-- Numeric features pass through unchanged. `station_id` is most-frequent
-  imputed and one-hot encoded. Preprocessing is fit on training data only.
-- Canonical model artifact: `artifacts/models/residual_hgb_pipeline.joblib`.
-  The root `models/` folder is retained as a legacy compatibility location.
-- MLflow tracks runs locally under `mlruns/`; that directory is not intended
-  for Git commits.
+The chronological training, validation, and test splits and the existing
+18-feature preprocessing pipeline are preserved. Numeric features pass through
+unchanged; `station_id` is imputed and one-hot encoded. Preprocessing is fit on
+training data only.
 
-For inference from the repository root, prepare a pandas DataFrame `X` with the
-18 model-ready feature columns:
+The current validation comparison uses 3,629 matched rows:
 
-```python
-from pathlib import Path
-
-import joblib
-from src.models.residual_hgb import EXPECTED_FEATURES
-
-model = joblib.load(Path("artifacts") / "models" / "residual_hgb_pipeline.joblib")
-predictions = model.predict(X.loc[:, EXPECTED_FEATURES])
-```
-
-## Results
-
-Validation uses 3,629 matched model-ready rows. No rows were excluded from
-that matched comparison.
-
-| Split / Metric | Persistence | Residual HGB |
+| Metric | Persistence | Residual HGB |
 |---|---:|---:|
-| Validation MAE | 10.7629 | 10.2357 |
-| Validation RMSE | 20.6201 | 20.4997 |
-| Validation R² | 0.8652 | 0.8668 |
-| Previously recorded test MAE | 20.0616 | 21.4392 |
-| Previously recorded test RMSE | 30.4415 | 33.8036 |
-| Previously recorded test R² | 0.9251 | 0.9077 |
+| MAE | 10.7629 | 10.2357 |
+| RMSE | 20.6201 | 20.4997 |
+| R² | 0.8652 | 0.8668 |
 
-The current artifact was re-evaluated on validation data only; the residual
-model improves all three overall validation metrics by a small margin. The
-saved test report contains 3,900 matched rows and favors persistence. However,
-its marker predates the current model artifact, so those results are historical
-and cannot be attributed to the current artifact. The test data has already
-been inspected; do not rerun evaluation or use it for tuning. A new untouched
-holdout period is needed for a final assessment of the current model.
+The existing saved test report is historical and predates the current model
+artifact. Test data has already been inspected; do not use it for tuning or
+repeat the guarded test evaluation. Use a new untouched holdout period for a
+future final assessment.
 
-## Setup and run
+## MLflow tracking and model registry
 
-Use Python 3.11 and Node.js. Install Python dependencies from the repository
-root:
+The project uses MLflow **2.14.1** with a SQLite backend store and a local
+artifact directory. `MLFLOW_TRACKING_URI` is the configuration source; the
+default is `http://127.0.0.1:7001`. The experiment is
+`AirPulse_PM25_Forecasting`. The existing registered model name is
+`airpulse-pm25-forecast`.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+Each `python train.py` run logs parameters, training and validation metrics,
+run metadata, and the serialized model. It registers a new model version.
+Promotion uses the existing validation methodology: the candidate passes only
+when its validation MAE is lower than the persistence baseline MAE on the same
+validation rows. There is no fixed absolute cutoff. A failed candidate is
+registered but does not replace the current `champion` alias. MLflow errors
+are surfaced rather than ignored.
+
+The API loads only the registered champion:
+
+```text
+models:/airpulse-pm25-forecast@champion
 ```
 
-Train and evaluate the residual candidate on validation data:
+## Run the full local application (Windows CMD)
 
-```powershell
+Use four CMD windows. Keep the MLflow server, API, and frontend windows open.
+Run training after MLflow is ready and before starting the API.
+In each window, replace `C:\path\to\AirPulse` with the folder where you
+extracted the project.
+
+### 1. MLflow server
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
+python -m mlflow server --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 7001 --default-artifact-root ./mlartifacts
+```
+
+Open the tracking UI at **http://127.0.0.1:7001**.
+
+### 2. Train and evaluate
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
 python train.py
 python -m scripts.evaluate
-python -m src.models.verify_residual_hgb
-python -m pytest
 ```
 
-Start the API from the repository root:
+The training run evaluates the candidate, registers its version, and assigns
+`champion` only after a passing gate. The separate evaluation command records
+another validation run.
 
-```powershell
-python -m uvicorn main:app --reload
+### 3. FastAPI backend (use this for the current checkout)
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-API endpoints are `/health` and `/predict`; interactive documentation is at
-`/docs`.
+Health check: **http://127.0.0.1:8000/health**
 
-Start the frontend in a second terminal:
+Interactive API docs: **http://127.0.0.1:8000/docs**
 
-```powershell
-Set-Location frontend
-npm install
-npm run dev
+### 4. React dashboard
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%\frontend"
+npm run dev -- --host 127.0.0.1
 ```
 
-The dashboard currently sends demonstration feature values to the working API.
-It does not load recent station measurements, and its historical trend panel is
-a placeholder; displayed predictions are not live forecasts.
+Open the Vite URL, normally **http://127.0.0.1:5173**. Click **Get next-hour
+prediction** to request a forecast. The dashboard currently sends demonstration
+feature values; it does not fetch live station measurements, and the historical
+panel is a placeholder.
 
-To download the dataset, copy `.env.example` to `.env` and set
-`XKDR_API_TOKEN`. Never commit `.env`. Existing local data and processed splits
-are described in the reports under `docs/`.
+### Optional Docker backend (no image build)
 
-When starting from a fresh dataset, run the data pipeline from the repository
-root in this order (the downloader refuses to overwrite existing monthly files):
+MLflow must be running on the host first. To start the existing container:
 
-```powershell
+```cmd
+docker start airpulse-api
+docker logs -f airpulse-api
+```
+
+The container uses `host.docker.internal:7001` to reach host MLflow and maps the
+API to port 8000. Use either this container **or** the local Uvicorn command;
+do not run both at once. An existing image does not include later source
+changes. No Docker Compose file is currently provided.
+
+## Verify the registry in MLflow UI
+
+1. Open **http://127.0.0.1:7001** and select `AirPulse_PM25_Forecasting`.
+2. Open a `residual_hgb_training` run to inspect its parameters, metrics, and
+   `model` and `metadata` artifacts.
+3. Open **Models** → `airpulse-pm25-forecast`.
+4. Confirm the new version is `READY` and the `champion` alias points to the
+   latest candidate that passed validation.
+
+## Initial setup
+
+Use Python 3.11 and Node.js. Install dependencies once from the repository
+root if they are not already installed:
+
+```cmd
+python -m venv .venv
+call .venv\Scripts\activate.bat
+python -m pip install -r requirements.txt
+cd frontend
+npm ci
+```
+
+For fresh data acquisition, put `XKDR_API_TOKEN` in a local `.env` based on
+`.env.example`; do not commit `.env`. Run the existing data pipeline from the
+repository root only when preparing a fresh dataset:
+
+```cmd
 python -m src.data.download_xkdr
 python -m src.data.preprocess
 python -m src.features.build_features
@@ -122,16 +169,31 @@ python -m src.data.split_dataset
 python -m src.data.prepare_model_data
 ```
 
-Then train and evaluate using the commands above. Keep the existing test split
-out of model selection; a new untouched holdout period is required for a valid
-final evaluation of the current artifact.
+## Repository structure
 
-The test-evaluation command is guarded against repeat runs. Do not remove its
-marker or rerun it; the saved test report is historical and does not verify the
-current artifact.
+```text
+AirPulse/
+├── artifacts/models/       # Local trained model and metadata
+├── backend/                # Backend compatibility entrypoint
+├── data/                   # Raw/processed datasets (keep local as appropriate)
+├── docs/                   # Project and evaluation documentation
+├── frontend/               # React, TypeScript, and Vite dashboard
+├── scripts/                # Training, evaluation, and MLflow startup
+├── src/
+│   ├── api/                # FastAPI schemas, routes, registry model loader
+│   ├── data/               # Validation, preparation, preprocessing, splits
+│   ├── features/           # Feature construction
+│   ├── models/             # Residual HGB and evaluation logic
+│   └── mlflow_config.py    # Shared tracking URI and model/experiment names
+├── tests/                  # API and data/model pipeline tests
+├── main.py                 # API entrypoint
+└── train.py                # Training entrypoint
+```
 
-## Repository map
+MLflow's `mlflow.db` and `mlartifacts/` are local tracking state; preserve them
+locally and do not commit them to Git.
 
+<<<<<<<<< Temporary merge branch 1
 - `src/data/`, `src/features/`, `src/models/`: data, feature and model pipeline.
 - `src/api/`, `backend/`: prediction API and compatibility entrypoint.
 - `scripts/`: MLflow training and validation evaluation commands.
@@ -146,3 +208,15 @@ current artifact.
 
 GitHub Actions runs the automated test, frontend build, and Docker packaging
 checks for pushes and pull requests.
+=========
+## GitHub and local state
+
+Push the application source, tests, documentation, dependency manifests, and
+`.env.example`. Do not push `.env`, `.venv/`, `frontend/node_modules/`,
+`mlflow.db` or its SQLite sidecars, `mlruns/`, or `mlartifacts/`. GitHub stores
+the code, not the local MLflow run history or registry; retain the database and
+artifact directory separately if that history must be preserved. Training
+requires the prepared CSV splits under `data/processed/model_ready/`; provide
+them through the project's approved data-storage method rather than committing
+private or restricted data.
+>>>>>>>>> Temporary merge branch 2
