@@ -20,6 +20,7 @@ app = FastAPI(
     title="AirPulse PM2.5 Forecasting API",
     description="Next-hour PM2.5 concentration predictions for Delhi monitoring stations.",
     version="1.0.0",
+    telemetry={"tracing": False},
 )
 
 _model = None

@@ -193,6 +193,7 @@ AirPulse/
 MLflow's `mlflow.db` and `mlartifacts/` are local tracking state; preserve them
 locally and do not commit them to Git.
 
+<<<<<<< HEAD
 ## GitHub and local state
 
 Push the application source, tests, documentation, dependency manifests, and
@@ -203,3 +204,19 @@ artifact directory separately if that history must be preserved. Training
 requires the prepared CSV splits under `data/processed/model_ready/`; provide
 them through the project's approved data-storage method rather than committing
 private or restricted data.
+=======
+- `src/data/`, `src/features/`, `src/models/`: data, feature and model pipeline.
+- `src/api/`, `backend/`: prediction API and compatibility entrypoint.
+- `scripts/`: MLflow training and validation evaluation commands.
+- `frontend/src/`: dashboard pages, components, styles and API client.
+- `artifacts/models/`: canonical serialized model and metadata.
+- `archive/experiments/`: retained, inactive validation-only experiment runner.
+- `docs/`: dataset, preprocessing, feature, split, baseline and evaluation
+  records.
+- `tests/`: API and pipeline tests.
+
+## Continuous integration
+
+GitHub Actions runs the automated test, frontend build, and Docker packaging
+checks for pushes and pull requests.
+>>>>>>> 6b466997c37191748f94630e94963af87e454c31
