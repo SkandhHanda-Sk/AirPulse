@@ -13,7 +13,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from src.api.model_loader import load_model, predict
+from src.api.model_loader import get_model_source, load_model, predict
 from src.api.schemas import HealthResponse, PredictionRequest, PredictionResponse
 
 app = FastAPI(
@@ -26,7 +26,7 @@ _model = None
 
 
 def _get_model():
-    """Lazy-load the trained model on first request."""
+    """Lazy-load the @champion model from MLflow Model Registry on first request."""
     global _model
     if _model is None:
         _model = load_model()
@@ -37,12 +37,14 @@ def _get_model():
 def health() -> HealthResponse:
     """Check API health and model readiness."""
     model_loaded = False
+    model_source = None
     try:
         _get_model()
         model_loaded = True
+        model_source = get_model_source()
     except Exception:  # noqa: BLE001 - model may not be trained yet
         model_loaded = False
-    return HealthResponse(model_loaded=model_loaded)
+    return HealthResponse(model_loaded=model_loaded, model_source=model_source)
 
 
 @app.post("/predict", response_model=PredictionResponse, tags=["prediction"])

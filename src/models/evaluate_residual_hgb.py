@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+from src.mlflow_config import (
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_TRACKING_URI,
+)
 from src.models.residual_hgb import ANCHOR_COLUMN, EXPECTED_FEATURES, TARGET_COLUMN
+
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -63,13 +72,22 @@ def metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | int]:
     }
 
 
-def main() -> None:
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"Residual HGB artifact not found: {MODEL_PATH}. "
-            "Run python -m src.models.train_residual_hgb first."
-        )
-    residual_model = joblib.load(MODEL_PATH)
+def validation_quality_gate_passed(
+    residual_mae: float,
+    persistence_mae: float,
+) -> bool:
+    """Require the model to improve on the existing persistence baseline."""
+    return residual_mae < persistence_mae
+
+
+def main(residual_model: Any | None = None) -> bool:
+    if residual_model is None:
+        if not MODEL_PATH.exists():
+            raise FileNotFoundError(
+                f"Residual HGB artifact not found: {MODEL_PATH}. "
+                "Run python train.py first."
+            )
+        residual_model = joblib.load(MODEL_PATH)
     X_validation, y_validation, metadata = load_and_validate("validation")
 
     persistence = pd.to_numeric(
@@ -120,6 +138,42 @@ def main() -> None:
             {"model": model_name, **metrics(y_match, y_pred)}
         )
     overall = pd.DataFrame(overall_rows)
+
+    # Log validation metrics to MLflow tracking server
+    residual_row = overall[overall["model"] == "Residual_HistGradientBoosting_L1"].iloc[0]
+    persistence_row = overall[overall["model"] == "Persistence"].iloc[0]
+    mlflow.log_metric("val_mae", float(residual_row["MAE"]))
+    mlflow.log_metric("val_rmse", float(residual_row["RMSE"]))
+    mlflow.log_metric("val_r2", float(residual_row["R2"]))
+    mlflow.log_metric("val_samples", int(residual_row["samples"]))
+    mlflow.log_param("validation_model", "Residual_HistGradientBoosting_L1")
+    mlflow.log_param("baseline_model", "Persistence")
+
+    residual_mae = float(residual_row["MAE"])
+    persistence_mae = float(persistence_row["MAE"])
+    quality_gate_passed = validation_quality_gate_passed(
+        residual_mae,
+        persistence_mae,
+    )
+    mlflow.log_param("quality_gate_passed", str(quality_gate_passed))
+    mlflow.log_param("quality_gate_metric", "val_mae")
+    mlflow.log_param(
+        "quality_gate_comparison",
+        "val_mae < persistence_val_mae",
+    )
+    mlflow.log_metric("quality_gate_persistence_mae", persistence_mae)
+    mlflow.log_metric("quality_gate_mae_delta", residual_mae - persistence_mae)
+
+    if quality_gate_passed:
+        print(
+            f"QUALITY GATE PASSED: val_mae={residual_mae:.4f} "
+            f"< persistence_mae={persistence_mae:.4f}."
+        )
+    else:
+        print(
+            f"QUALITY GATE FAILED: val_mae={residual_mae:.4f} "
+            f">= persistence_mae={persistence_mae:.4f}."
+        )
 
     station_rows = []
     for station_id in sorted(predictions["station_id"].unique()):
@@ -213,6 +267,12 @@ def main() -> None:
             (OUTPUT_DIR / "residual_hgb_validation_predictions.csv").relative_to(PROJECT_ROOT)
         ),
     }
+    model_info["quality_gate"] = {
+        "metric": "MAE",
+        "candidate_mae": residual_mae,
+        "persistence_mae": persistence_mae,
+        "passed": quality_gate_passed,
+    }
     MODEL_INFO_PATH.write_text(
         json.dumps(model_info, indent=2),
         encoding="utf-8",
@@ -223,6 +283,7 @@ def main() -> None:
     print(station.to_string(index=False, float_format=lambda value: f"{value:.4f}"))
     print(f"\nExcluded rows: {excluded}")
     print("Selected model frozen for held-out test evaluation.")
+    return quality_gate_passed
 
 
 if __name__ == "__main__":

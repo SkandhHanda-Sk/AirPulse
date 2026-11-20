@@ -1,41 +1,33 @@
-"""Singleton model loader for the trained Residual HGB pipeline."""
+"""Singleton model loader that loads the @champion model from MLflow Model Registry."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import joblib
+import mlflow
 import pandas as pd
 
+from src.mlflow_config import MLFLOW_TRACKING_URI, REGISTERED_MODEL_NAME
 from src.models.residual_hgb import ANCHOR_COLUMN, EXPECTED_FEATURES
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_MODEL_CANDIDATES = (
-    _PROJECT_ROOT / "artifacts" / "models" / "residual_hgb_pipeline.joblib",
-    _PROJECT_ROOT / "models" / "residual_hgb_pipeline.joblib",
-)
-
 _model: Any = None
-
-
-def _resolve_model_path() -> Path:
-    for path in _MODEL_CANDIDATES:
-        if path.exists():
-            return path
-    searched = ", ".join(str(p) for p in _MODEL_CANDIDATES)
-    raise FileNotFoundError(
-        f"Model artifact not found. Searched: {searched}. "
-        "Run 'python -m src.models.train_residual_hgb' or 'python train.py' first."
-    )
+_model_source: str = ""
 
 
 def load_model() -> Any:
-    """Load and cache the trained model artifact."""
-    global _model
+    """Load and cache the @champion model from MLflow Model Registry."""
+    global _model, _model_source
     if _model is None:
-        _model = joblib.load(_resolve_model_path())
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        model_uri = f"models:/{REGISTERED_MODEL_NAME}@champion"
+        _model = mlflow.pyfunc.load_model(model_uri)
+        _model_source = model_uri
     return _model
+
+
+def get_model_source() -> str:
+    """Return the URI of the currently loaded model."""
+    return _model_source
 
 
 def get_feature_columns() -> list[str]:

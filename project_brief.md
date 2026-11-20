@@ -1,90 +1,132 @@
 # AirPulse — Project Brief
 
-## Purpose
+## Overview
 
-AirPulse is an academic machine-learning application that forecasts continuous
-PM2.5 concentration one hour ahead for three Delhi air-quality stations. It is
-an MLOps learning project, not an official air-quality warning service.
+AirPulse is an academic MLOps application for forecasting continuous PM2.5
+concentration one hour ahead at three Delhi monitoring stations. The source is
+the 2024 XKDR Forum India Air Quality Database. The model target is
+`target_pm25_next_hour` in µg/m³, not AQI. AirPulse is not an official forecast
+or health-advice service.
 
-## Data and prediction target
+| Station ID | Location |
+|---|---|
+| `site_113` | Shadipur |
+| `site_115` | NSIT Dwarka |
+| `site_117` | ITO |
 
-- **Dataset:** XKDR Forum India Air Quality Database.
-- **Period:** 2024 hourly observations.
-- **Stations:** `site_113` (Shadipur), `site_115` (NSIT Dwarka), and
-  `site_117` (ITO).
-- **Target:** `target_pm25_next_hour`, in µg/m³; this is not AQI.
-- **Horizon:** Predict at `t` using information available at `t`, for `t+1`.
+## Data and model
 
-The pipeline creates historical lag, rolling and calendar features. It retains
-the current PM2.5 value (`pm25_at_origin`) as the persistence anchor. Data is
-split chronologically by target time; the held-out test period is not used for
-model selection. Preprocessing is fitted on training data only.
+The pipeline constructs historical lag, rolling, and calendar features and
+splits chronologically by target time. The existing 18-feature schema,
+preprocessing, and train/validation/test methodology are preserved. Numeric
+features pass through unchanged; `station_id` is imputed and one-hot encoded.
+The preprocessing pipeline is fit on training data only.
 
-## Models and evaluation
-
-The persistence baseline predicts `pm25_at_origin`. The machine-learning
-candidate is a persistence-anchored residual HistGradientBoosting model:
+The baseline predicts persistence (`pm25_at_origin`). The candidate is a
+persistence-anchored residual HistGradientBoosting regressor:
 
 ```text
-residual = actual_next_hour_pm25 - pm25_at_origin
+residual   = actual_next_hour_pm25 - pm25_at_origin
 prediction = pm25_at_origin + predicted_residual
 ```
 
-It uses `loss="absolute_error"`, learning rate `0.05`, 300 iterations, 31
-maximum leaf nodes, 20 minimum samples per leaf, L2 regularization `1.0`, no
-early stopping, and random state `42`. Numeric features are unscaled and
-unimputed; `station_id` is most-frequent imputed and one-hot encoded. The
-preprocessor and estimator are saved together.
-
-The reproduced matched validation comparison has 3,629 rows:
+Current matched validation results (3,629 rows):
 
 | Model | MAE | RMSE | R² |
 |---|---:|---:|---:|
 | Persistence | 10.7629 | 20.6201 | 0.8652 |
 | Residual HGB | 10.2357 | 20.4997 | 0.8668 |
 
-The saved historical test report contains 3,900 rows:
+The saved test report is historical and predates the current artifact. Test
+data has already been inspected and must not be used for tuning or another
+evaluation run. A new untouched holdout period is needed for a future final
+assessment.
 
-| Model | MAE | RMSE | R² |
-|---|---:|---:|---:|
-| Persistence | 20.0616 | 30.4415 | 0.9251 |
-| Residual HGB | 21.4392 | 33.8036 | 0.9077 |
-
-The current artifact improves all three overall validation metrics by a small
-margin. The saved test report favors persistence, but its marker predates the
-current model artifact; those results cannot be attributed to the current
-artifact and are historical only. The test data has already been inspected and
-must not be reused. A new untouched holdout period is required for a final
-assessment of the current model. See
-`docs/model_evaluation_and_current_selection.md` for details. The older
-persistence-only report uses rows before 18-feature model-ready filtering, so
-its counts and metrics are not a like-for-like comparison with these matched
-model results.
-
-## Application and MLOps components
+## Application and MLOps
 
 - **API:** FastAPI (`main.py`, `src/api/`), with `/health`, `/predict`, and
-  interactive API documentation at `/docs`.
-- **Dashboard:** React, TypeScript and Vite (`frontend/`). It currently sends
-  demonstration inputs; historical observations are not live-fed, and the
-  historical chart is a placeholder.
-- **Experiment tracking:** MLflow local store (`mlruns/`).
-- **Automation and packaging:** GitHub Actions, Docker, and pytest.
+  OpenAPI docs at `/docs`.
+- **Dashboard:** React, TypeScript, Vite (`frontend/`). It submits demonstration
+  inputs; it is not connected to live station measurements. Historical charts
+  are placeholders.
+- **Experiment tracking:** MLflow 2.14.1, SQLite backend store (`mlflow.db`),
+  artifact directory (`mlartifacts/`), tracking server at port 7001.
+- **Experiment:** `AirPulse_PM25_Forecasting`.
+- **Registered model:** `airpulse-pm25-forecast` (existing project name).
+- **Serving URI:** `models:/airpulse-pm25-forecast@champion`.
+- **Quality gate:** validation MAE must be lower than persistence MAE on the
+  same validation rows. There is no arbitrary absolute cutoff. Training creates
+  a new model version; only a gate-passing version receives the `champion`
+  alias. A failed candidate leaves the current champion unchanged.
+- **Docker:** the FastAPI image connects to host MLflow using
+  `host.docker.internal:7001`. Use a Docker image built from the intended
+  source revision; running an older image does not include subsequent source
+  changes.
 
-## Reproducibility
+## Run locally (Windows CMD)
 
-From the repository root, with dependencies installed:
+Replace `C:\path\to\AirPulse` in each CMD window with the extracted project
+folder. Start the MLflow server in one window and leave it open:
 
-```powershell
-python train.py
-python -m scripts.evaluate
-python -m src.models.verify_residual_hgb
-python -m pytest
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
+python -m mlflow server --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 7001 --default-artifact-root ./mlartifacts
 ```
 
-The test evaluator is guarded against repeat runs. Do not remove its marker or
-rerun it. The canonical fitted pipeline and metadata are in `artifacts/models/`.
+In another CMD window, train and evaluate:
 
-For data acquisition, set `XKDR_API_TOKEN` in a local `.env` file based on
-`.env.example`; do not commit `.env`. More detailed dataset, quality,
-preprocessing, feature, split, baseline and evaluation evidence is in `docs/`.
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
+python train.py
+python -m scripts.evaluate
+```
+
+Start the current source API in a third window:
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%"
+call .venv\Scripts\activate.bat
+set MLFLOW_TRACKING_URI=http://127.0.0.1:7001
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Start the dashboard in a fourth window:
+
+```cmd
+set "AIRPULSE_ROOT=C:\path\to\AirPulse"
+cd /d "%AIRPULSE_ROOT%\frontend"
+npm run dev -- --host 127.0.0.1
+```
+
+Open the MLflow UI at `http://127.0.0.1:7001`, API docs at
+`http://127.0.0.1:8000/docs`, and the Vite dashboard at
+`http://127.0.0.1:5173`. If using the Docker API instead of local Uvicorn, do
+not start both because both use port 8000.
+
+## Repository map
+
+```text
+artifacts/models/  Local model output and metadata
+backend/           Compatibility entrypoint
+data/              Dataset and generated evaluation data
+docs/              Supporting project documentation
+frontend/          React dashboard and Vite configuration
+scripts/           Train, evaluate, and MLflow server entrypoints
+src/api/           FastAPI endpoints, schemas, registry model loading
+src/data/          Validation, preparation, preprocessing, data splits
+src/features/      Feature engineering
+src/models/        Residual model and evaluation
+src/mlflow_config.py Shared MLflow configuration
+tests/             API and pipeline tests
+```
+
+Keep `.env`, `mlflow.db`, `mlartifacts/`, virtual environments, and local
+datasets out of Git. `.env.example` documents the local environment variables;
+never commit real credentials.
