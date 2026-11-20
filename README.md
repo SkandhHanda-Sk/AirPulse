@@ -169,37 +169,27 @@ python -m src.data.split_dataset
 python -m src.data.prepare_model_data
 ```
 
-## Repository structure
+Then train and evaluate using the commands above. Keep the existing test split
+out of model selection; a new untouched holdout period is required for a valid
+final evaluation of the current artifact.
 
-```text
-AirPulse/
-├── artifacts/models/       # Local trained model and metadata
-├── backend/                # Backend compatibility entrypoint
-├── data/                   # Raw/processed datasets (keep local as appropriate)
-├── docs/                   # Project and evaluation documentation
-├── frontend/               # React, TypeScript, and Vite dashboard
-├── scripts/                # Training, evaluation, and MLflow startup
-├── src/
-│   ├── api/                # FastAPI schemas, routes, registry model loader
-│   ├── data/               # Validation, preparation, preprocessing, splits
-│   ├── features/           # Feature construction
-│   ├── models/             # Residual HGB and evaluation logic
-│   └── mlflow_config.py    # Shared tracking URI and model/experiment names
-├── tests/                  # API and data/model pipeline tests
-├── main.py                 # API entrypoint
-└── train.py                # Training entrypoint
-```
+The test-evaluation command is guarded against repeat runs. Do not remove its
+marker or rerun it; the saved test report is historical and does not verify the
+current artifact.
 
-MLflow's `mlflow.db` and `mlartifacts/` are local tracking state; preserve them
-locally and do not commit them to Git.
+## Repository map
 
-## GitHub and local state
+- `src/data/`, `src/features/`, `src/models/`: data, feature and model pipeline.
+- `src/api/`, `backend/`: prediction API and compatibility entrypoint.
+- `scripts/`: MLflow training and validation evaluation commands.
+- `frontend/src/`: dashboard pages, components, styles and API client.
+- `artifacts/models/`: canonical serialized model and metadata.
+- `archive/experiments/`: retained, inactive validation-only experiment runner.
+- `docs/`: dataset, preprocessing, feature, split, baseline and evaluation
+  records.
+- `tests/`: API and pipeline tests.
 
-Push the application source, tests, documentation, dependency manifests, and
-`.env.example`. Do not push `.env`, `.venv/`, `frontend/node_modules/`,
-`mlflow.db` or its SQLite sidecars, `mlruns/`, or `mlartifacts/`. GitHub stores
-the code, not the local MLflow run history or registry; retain the database and
-artifact directory separately if that history must be preserved. Training
-requires the prepared CSV splits under `data/processed/model_ready/`; provide
-them through the project's approved data-storage method rather than committing
-private or restricted data.
+## Continuous integration
+
+GitHub Actions runs the automated test, frontend build, and Docker packaging
+checks for pushes and pull requests.
