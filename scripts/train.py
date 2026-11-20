@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+﻿# Train entrypoint for AirPulse residual HGB with MLflow
 
 import json
 import sys
@@ -10,9 +10,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import joblib
-import mlflow
-import mlflow.sklearn
-from mlflow import MlflowClient
 
 from src.models.train_residual_hgb import (
     EXPECTED_FEATURES,
@@ -22,9 +19,21 @@ from src.models.train_residual_hgb import (
     load_training_data,
 )
 
-# MLFlow tracking - file-based (no separate server needed)
-mlflow.set_tracking_uri("mlruns")
-mlflow.set_experiment("AirPulse_PM25_Forecasting")
+import os
+os.environ["GIT_PYTHON_REFRESH"] = "quiet"
+
+# MLflow tracking - file-based (no separate server needed)
+try:
+    import mlflow
+    import mlflow.sklearn
+    from mlflow.tracking import MlflowClient
+    mlruns_path = (PROJECT_ROOT / "mlruns").resolve()
+    mlflow.set_tracking_uri(mlruns_path.as_uri())
+    mlflow.set_experiment("AirPulse_PM25_Forecasting")
+    MLFLOW_AVAILABLE = True
+except Exception as ex:
+    print(f"MLflow setup warning: {ex}")
+    MLFLOW_AVAILABLE = False
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = PROJECT_ROOT / "artifacts" / "models" / "residual_hgb_pipeline.joblib"
@@ -51,45 +60,46 @@ def main() -> None:
     print(f"Model saved to {MODEL_PATH}")
 
     run_id = None
-    try:
-        with mlflow.start_run() as run:
-            run_id = run.info.run_id
-            mlflow.log_params(HGB_PARAMS)
-            mlflow.log_param("feature_count", len(EXPECTED_FEATURES))
-            mlflow.log_param("training_rows", len(X_train))
-            mlflow.log_param(
-                "stations",
-                ",".join(sorted(metadata_train["station_id"].unique().tolist())),
-            )
-            mlflow.log_metrics({"train_mae": mae, "train_rmse": rmse, "train_r2": r2})
-            mlflow.sklearn.log_model(
-                sk_model=model,
-                name="residual-hgb-model",
-                registered_model_name="airpulse-pm25-forecast",
-            )
-            try:
-                client = MlflowClient()
-                registered_versions = client.search_model_versions(
-                    "name='airpulse-pm25-forecast'"
+    if MLFLOW_AVAILABLE:
+        try:
+            with mlflow.start_run() as run:
+                run_id = run.info.run_id
+                mlflow.log_params(HGB_PARAMS)
+                mlflow.log_param("feature_count", len(EXPECTED_FEATURES))
+                mlflow.log_param("training_rows", len(X_train))
+                mlflow.log_param(
+                    "stations",
+                    ",".join(sorted(metadata_train["station_id"].unique().tolist())),
                 )
-                current_model_version = next(
-                    (v for v in registered_versions if v.run_id == run_id), None
+                mlflow.log_metrics({"train_mae": mae, "train_rmse": rmse, "train_r2": r2})
+                mlflow.sklearn.log_model(
+                    sk_model=model,
+                    artifact_path="residual-hgb-model",
+                    registered_model_name="airpulse-pm25-forecast",
                 )
-                if current_model_version:
-                    client.set_registered_model_alias(
-                        name="airpulse-pm25-forecast",
-                        alias="champion",
-                        version=current_model_version.version,
+                try:
+                    client = MlflowClient()
+                    registered_versions = client.search_model_versions(
+                        "name='airpulse-pm25-forecast'"
                     )
-                    print(
-                        f"Registered model: airpulse-pm25-forecast "
-                        f"version {current_model_version.version} as champion"
+                    current_model_version = next(
+                        (v for v in registered_versions if v.run_id == run_id), None
                     )
-            except Exception as ex:
-                print(f"MLflow model registration warning: {ex}")
-            print(f"MLflow run logged: {run_id}")
-    except Exception as ex:
-        print(f"MLflow logging warning (non-fatal): {ex}")
+                    if current_model_version:
+                        client.set_registered_model_alias(
+                            name="airpulse-pm25-forecast",
+                            alias="champion",
+                            version=current_model_version.version,
+                        )
+                        print(
+                            f"Registered model: airpulse-pm25-forecast "
+                            f"version {current_model_version.version} as champion"
+                        )
+                except Exception as ex:
+                    print(f"MLflow model registration warning: {ex}")
+                print(f"MLflow run logged: {run_id}")
+        except Exception as ex:
+            print(f"MLflow logging warning (non-fatal): {ex}")
 
     model_info = {
         "model_name": "Persistence-Anchored Residual HistGradientBoosting",

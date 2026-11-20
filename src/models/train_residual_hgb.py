@@ -1,9 +1,10 @@
-from __future__ import annotations
+# Training logic for persistence-anchored residual HGB
 
 import json
 import platform
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -25,7 +26,7 @@ MODEL_PATH = PROJECT_ROOT / "artifacts" / "models" / "residual_hgb_pipeline.jobl
 MODEL_INFO_PATH = PROJECT_ROOT / "artifacts" / "models" / "residual_hgb_model_info.json"
 
 
-def load_training_data() -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame]:
+def load_training_data():
     required = [
         DATA_DIR / "X_train.csv",
         DATA_DIR / "y_train.csv",

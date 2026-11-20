@@ -130,6 +130,48 @@ The test-evaluation command is guarded against repeat runs. Do not remove its
 marker or rerun it; the saved test report is historical and does not verify the
 current artifact.
 
+## Model Quality Monitoring & Retraining (MLOps Assessment)
+
+This repository includes a continuous model-quality monitoring and retraining pipeline (Tasks A–E):
+
+```text
+Incoming Batch -> [Task A] Schema & Hygiene Validation -> monitoring/data/new_batch.csv
+              -> [Task B] Champion Evaluation (MAE, RMSE, R²) -> monitoring/reports/evaluation_report.json
+              -> [Task C] Candidate Retraining + MLflow Tracking -> artifacts/models/candidate_model.joblib
+              -> [Task D] Quality Gate (MAE ≤ Champion × 1.02) -> monitoring/reports/quality_gate_decisions.jsonl
+              -> [Task E] Execution Evidence, Audit Trail & Documentation
+```
+
+### Running the Monitoring Workflow
+
+Run end-to-end via command line:
+
+```powershell
+python monitoring/run_monitoring_pipeline.py
+```
+
+Or open and run the interactive Jupyter notebook:
+
+```powershell
+jupyter notebook monitoring/monitoring_retraining.ipynb
+```
+
+Run automated monitoring unit tests:
+
+```powershell
+pytest tests/test_monitoring.py
+```
+
+### Quality Gate Decision Rule & Metric Justification
+
+- **Primary Metric:** Mean Absolute Error (MAE, in µg/m³).
+- **Rule:** `Candidate MAE <= Champion MAE * 1.02` (2% tolerance).
+- **Justification:**
+  1. Internal consistency: The model is trained with L1 absolute loss (`least_absolute_deviation` / `absolute_error`).
+  2. Domain interpretability: Error is directly in µg/m³, mapping to CPCB / WHO health advisory bands.
+  3. Robustness: Avoids quadratic inflation from episodic PM2.5 spikes common in Delhi.
+  4. Non-destructive safety guardrail: The champion model is never automatically overwritten without human sign-off.
+
 ## Repository map
 
 - `src/data/`, `src/features/`, `src/models/`: data, feature and model pipeline.

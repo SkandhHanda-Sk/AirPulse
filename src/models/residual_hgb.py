@@ -1,4 +1,4 @@
-from __future__ import annotations
+# Persistence-anchored residual HGB model implementation
 
 from typing import Any
 
@@ -6,7 +6,11 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import HistGradientBoostingRegressor
+try:
+    from sklearn.ensemble import HistGradientBoostingRegressor
+except ImportError:
+    from sklearn.experimental import enable_hist_gradient_boosting
+    from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -36,8 +40,14 @@ NUMERIC_FEATURES = [
 ]
 EXPECTED_FEATURES = CATEGORICAL_FEATURES + NUMERIC_FEATURES
 
+# Loss parameter name compatibility across scikit-learn versions
+if hasattr(HistGradientBoostingRegressor, "_VALID_LOSSES") and "absolute_error" not in HistGradientBoostingRegressor._VALID_LOSSES:
+    DEFAULT_LOSS = "least_absolute_deviation"
+else:
+    DEFAULT_LOSS = "absolute_error"
+
 HGB_PARAMS = {
-    "loss": "absolute_error",
+    "loss": DEFAULT_LOSS,
     "learning_rate": 0.05,
     "max_iter": 300,
     "max_leaf_nodes": 31,
@@ -53,9 +63,9 @@ class PersistenceAnchorRegressor(BaseEstimator, RegressorMixin):
 
     def __init__(
         self,
-        base_pipeline: Any,
+        base_pipeline: Any = None,
         anchor_col: str = ANCHOR_COLUMN,
-    ) -> None:
+    ):
         self.base_pipeline = base_pipeline
         self.anchor_col = anchor_col
 
@@ -63,12 +73,12 @@ class PersistenceAnchorRegressor(BaseEstimator, RegressorMixin):
         self,
         X: pd.DataFrame,
         y: np.ndarray,
-    ) -> "PersistenceAnchorRegressor":
+    ):
         if not isinstance(X, pd.DataFrame):
             raise TypeError("X must be a pandas DataFrame.")
         if self.anchor_col not in X.columns:
             raise ValueError(
-                f"Anchor column '{self.anchor_col}' is missing from model inputs."
+                "Anchor column '{}' is missing from model inputs.".format(self.anchor_col)
             )
 
         anchor = pd.to_numeric(
@@ -78,7 +88,7 @@ class PersistenceAnchorRegressor(BaseEstimator, RegressorMixin):
         actual = np.asarray(y, dtype=float)
         if len(X) != len(actual):
             raise ValueError(
-                f"Feature/target row mismatch: X={len(X)}, y={len(actual)}."
+                "Feature/target row mismatch: X={}, y={}.".format(len(X), len(actual))
             )
         if not np.isfinite(anchor).all():
             raise ValueError("Non-finite anchor values found in training data.")
@@ -95,7 +105,7 @@ class PersistenceAnchorRegressor(BaseEstimator, RegressorMixin):
             raise TypeError("X must be a pandas DataFrame.")
         if self.anchor_col not in X.columns:
             raise ValueError(
-                f"Anchor column '{self.anchor_col}' is missing from model inputs."
+                "Anchor column '{}' is missing from model inputs.".format(self.anchor_col)
             )
 
         anchor = pd.to_numeric(
@@ -115,18 +125,17 @@ class PersistenceAnchorRegressor(BaseEstimator, RegressorMixin):
         return prediction
 
 
-def build_residual_hgb_pipeline() -> PersistenceAnchorRegressor:
+def build_residual_hgb_pipeline():
     """Build the preprocessing plus residual HGB pipeline."""
+    try:
+        encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    except TypeError:
+        encoder = OneHotEncoder(handle_unknown="ignore", sparse=False)
+
     categorical_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            (
-                "encoder",
-                OneHotEncoder(
-                    handle_unknown="ignore",
-                    sparse_output=False,
-                ),
-            ),
+            ("encoder", encoder),
         ]
     )
 

@@ -1,0 +1,34 @@
+{
+  "task": "Task B -- Evaluate Existing Model",
+  "timestamp_utc": "2026-11-20T09:13:56.194412Z",
+  "champion_artifact": "C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\AirPulse\\artifacts\\models\\residual_hgb_pipeline.joblib",
+  "evaluation_samples": 3629,
+  "metrics": {
+    "mae": 10.1484,
+    "rmse": 20.4157,
+    "r2": 0.8678
+  },
+  "persistence_baseline_metrics": {
+    "mae": 10.7629,
+    "rmse": 20.6201,
+    "r2": 0.8652
+  },
+  "station_breakdown": {
+    "site_113": {
+      "mae": 10.8039,
+      "rmse": 22.4291,
+      "r2": 0.8343
+    },
+    "site_115": {
+      "mae": 11.5522,
+      "rmse": 18.8073,
+      "r2": 0.8716
+    },
+    "site_117": {
+      "mae": 7.9932,
+      "rmse": 19.8095,
+      "r2": 0.8926
+    }
+  },
+  "evaluation_dataset": "C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\AirPulse\\monitoring\\data\\new_batch.csv"
+}

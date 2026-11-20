@@ -1,0 +1,20 @@
+{
+  "task": "Task C -- Retrain the Model",
+  "timestamp_utc": "2026-11-20T09:14:03.412128Z",
+  "candidate_artifact": "C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\AirPulse\\artifacts\\models\\candidate_model.joblib",
+  "historical_rows": 15016,
+  "new_batch_rows": 3629,
+  "total_training_rows": 18645,
+  "candidate_train_metrics": {
+    "mae": 11.1828,
+    "rmse": 24.7186,
+    "r2": 0.8878
+  },
+  "candidate_new_batch_metrics": {
+    "mae": 8.6084,
+    "rmse": 18.2648,
+    "r2": 0.8942
+  },
+  "mlflow_run_id": "5ae841605e054e428fa53d4dc1bbf6bb",
+  "mlflow_experiment": "AirPulse_PM25_Forecasting"
+}
