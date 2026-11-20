@@ -17,6 +17,16 @@ def test_health_endpoint_returns_200():
     assert "model_artifact" in data
 
 
+def test_root_endpoint_returns_200():
+    """GET / should return 200 with service information."""
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "AirPulse PM2.5 Forecasting API"
+    assert data["status"] == "online"
+    assert "docs_url" in data
+
+
 def test_predict_endpoint_returns_valid_prediction():
     """POST /predict should return a valid next-hour PM2.5 prediction."""
     payload = {
